@@ -1,0 +1,15 @@
+# .NET build artifacts
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+
+# Publish output
+publish/
+
+# SDD scratch
+.superpowers/
+
+# Local Claude Code tooling config (not part of the project)
+CLAUDE.md
