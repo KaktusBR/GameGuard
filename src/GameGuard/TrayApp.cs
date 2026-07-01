@@ -18,6 +18,8 @@ static class TrayApp
         UnlockForm? openWindow = null;
         long lastBlockSeq = -1;                       // -1 = backlog not yet baselined
         var lastPop = DateTime.MinValue;
+        bool? wasLocked = null;                        // null = first poll not yet seen
+        var warnedSoon = false;                        // "almost done" shown once per unlock
 
         // Opens the (single) unlock window. blockedGame != null => auto-pop "blocked" mode.
         void OpenUnlock(string? blockedGame)
@@ -81,6 +83,29 @@ static class TrayApp
                 var s = client.Send(new PipeRequest("status"));
                 tray.Text = Truncate(Describe(s));
 
+                // Unlock / expiry toasts (skip the first poll — that's just the baseline).
+                if (wasLocked is bool prev)
+                {
+                    if (prev && !s.IsLocked)
+                    {
+                        warnedSoon = false;
+                        Notify(tray, "Games unlocked",
+                            $"Game time: {Duration(s.RemainingSeconds)} — until {Until(s.RemainingSeconds)}.",
+                            ToolTipIcon.Info);
+                    }
+                    else if (!prev && s.IsLocked)
+                    {
+                        Notify(tray, "Time's up", "Game time is over — games are locked again.", ToolTipIcon.Info);
+                    }
+                }
+                if (!s.IsLocked && s.RemainingSeconds is > 0 and <= 120 && !warnedSoon)
+                {
+                    warnedSoon = true;
+                    Notify(tray, "Almost done", "About 2 minutes of game time left.", ToolTipIcon.Warning);
+                }
+                wasLocked = s.IsLocked;
+
+                // Auto-pop the blocked window on a new block.
                 if (lastBlockSeq < 0)
                 {
                     lastBlockSeq = s.BlockSeq;        // skip events that predate startup
@@ -114,8 +139,33 @@ static class TrayApp
 
     private static string Describe(PipeResponse s) =>
         s.IsLocked
-            ? "GameGuard: games locked"
-            : $"GameGuard: unlocked ({s.RemainingSeconds / 60} min left)";
+            ? "GameGuard — games are locked"
+            : $"GameGuard — unlocked, {Remaining(s.RemainingSeconds)} left (until {Until(s.RemainingSeconds)})";
+
+    private static void Notify(NotifyIcon tray, string title, string text, ToolTipIcon icon)
+    {
+        tray.BalloonTipTitle = title;
+        tray.BalloonTipText = text;
+        tray.BalloonTipIcon = icon;
+        tray.ShowBalloonTip(5000);
+    }
+
+    // Wall-clock time the current unlock expires, in the user's locale format.
+    private static string Until(int seconds) => DateTime.Now.AddSeconds(seconds).ToString("t");
+
+    private static string Duration(int seconds)
+    {
+        var m = (int)Math.Round(seconds / 60.0);
+        return m >= 60 && m % 60 == 0 ? $"{m / 60} hour(s)" : $"{m} minutes";
+    }
+
+    // Compact remaining time for the tray tooltip: "45 sec", "42 min", "1h 05m".
+    private static string Remaining(int seconds)
+    {
+        if (seconds < 60) return $"{seconds} sec";
+        if (seconds < 3600) return $"{seconds / 60} min";
+        return $"{seconds / 3600}h {seconds % 3600 / 60:00}m";
+    }
 
     private static string Truncate(string text) =>
         text.Length <= 63 ? text : text[..63]; // NotifyIcon.Text hard limit
