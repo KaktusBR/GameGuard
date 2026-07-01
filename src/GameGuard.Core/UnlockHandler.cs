@@ -9,15 +9,18 @@ public class UnlockHandler
     private readonly LockManager _lockManager;
     private readonly Func<GameGuardConfig> _configProvider;
     private readonly Func<DateTimeOffset> _clock;
+    private readonly BlockEventLog? _blockLog;
 
     private int _failedAttempts;
     private DateTimeOffset? _lockoutUntil;
 
-    public UnlockHandler(LockManager lockManager, Func<GameGuardConfig> configProvider, Func<DateTimeOffset> clock)
+    public UnlockHandler(LockManager lockManager, Func<GameGuardConfig> configProvider,
+        Func<DateTimeOffset> clock, BlockEventLog? blockLog = null)
     {
         _lockManager = lockManager;
         _configProvider = configProvider;
         _clock = clock;
+        _blockLog = blockLog;
     }
 
     public PipeResponse Handle(PipeRequest request)
@@ -69,8 +72,9 @@ public class UnlockHandler
     private PipeResponse Status()
     {
         var remaining = (int)(_lockManager.Remaining?.TotalSeconds ?? 0);
+        var (seq, recent) = _blockLog?.Snapshot() ?? (0L, Array.Empty<BlockEvent>());
         return new PipeResponse(true, _lockManager.IsLocked, remaining, null,
-            _configProvider().DurationsMinutes);
+            _configProvider().DurationsMinutes, seq, recent);
     }
 
     private PipeResponse Fail(string error) =>

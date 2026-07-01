@@ -1,8 +1,7 @@
 using System.IO;
 using System.Runtime.Versioning;
-using GameGuard.Core;
 
-namespace GameGuard.Service;
+namespace GameGuard.Core;
 
 [SupportedOSPlatform("windows")]
 public class HostsFileApplier

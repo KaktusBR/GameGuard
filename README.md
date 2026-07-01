@@ -29,51 +29,46 @@ GameGuard is designed to stop a casual child, not a determined attacker. Know th
 
 ---
 
-## Components
+## One File, Several Roles
 
-| Component | Role |
+GameGuard ships as a **single self-contained `GameGuard.exe`** (no .NET install needed on the target PC). The same binary behaves differently depending on how it is launched:
+
+| Launch | Role |
 |---|---|
-| **GameGuard.Service** | SYSTEM Windows Service — enforces process blocking and `hosts` injection; exposes a hardened named pipe (`GameGuardPipe`) for inter-process communication. |
-| **GameGuard.Agent** | Per-session tray application — shows the "blocked" notification and the unlock dialog in the child's interactive desktop session. |
-| **GameGuard.Admin** | UAC-elevated Admin tool — lets the parent set/change the PBKDF2-hashed unlock code and edit the game/folder/domain blocklist stored in `C:\ProgramData\GameGuard\config.json`. |
+| **Double-click** | Setup window — set the parent code and Install / Update / Uninstall. Self-elevates (one UAC prompt) for the privileged steps. |
+| *(run as a service)* | SYSTEM enforcement worker — process blocking + `hosts` injection; serves the hardened named pipe (`GameGuardPipe`). |
+| `--agent` | Per-session tray app — controller tray icon, status/unlock menu, and a notification when a game is blocked. Started at logon for standard users. |
+| `--admin` | Settings window — edit the PBKDF2-hashed unlock code and the game/folder/domain blocklist in `C:\ProgramData\GameGuard\config.json`. |
+| `--install` / `--uninstall` | The elevated install/uninstall steps (invoked by the setup window). |
 
 ---
 
-## Build Prerequisites
+## Installing (for a parent)
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) (includes the `dotnet` CLI)
-- Windows 10 / Windows 11 (x64)
+You only need the one `GameGuard.exe` file. No .NET install, no scripts.
 
-To verify your SDK:
+1. **Double-click `GameGuard.exe`.** A small setup window opens.
+2. **Type a parent code** (twice to confirm) and click **Install**.
+3. **Approve the one Windows (UAC) prompt.** Admin rights are required *once* to register the protective service — after that the child needs nothing and cannot remove it.
+4. Done. Games are blocked immediately, the controller tray icon appears, and protection survives reboots.
+
+To change the code or blocklist later, run `GameGuard.exe` again (the setup window's **Update**), or open the settings window with `GameGuard.exe --admin`.
+
+### Updating to a new version
+
+Download the newer `GameGuard.exe`, run it, and click **Update** (approve the UAC prompt). Setup stops the running service, closes the old tray agent, swaps in the new binary, and restarts everything — your parent code and blocklist are preserved. (Run the *new* download, not the copy already in Program Files, so there's a fresh binary to install.)
+
+---
+
+## Building the EXE (for developers)
+
+Prerequisites: [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and Windows 10/11 (x64).
 
 ```powershell
-dotnet --version   # should print 8.x.x
+.\install\Build-GameGuard.ps1
 ```
 
----
-
-## Installation
-
-1. **Open an elevated PowerShell** (right-click PowerShell → "Run as Administrator").
-
-2. **Run the install script** from the repo root:
-
-   ```powershell
-   .\install\Install-GameGuard.ps1
-   ```
-
-   This will:
-   - Publish all three projects to `.\publish\` as self-contained win-x64 executables.
-   - Register `GameGuard` as an auto-start Windows Service running as `LocalSystem`, with automatic restart-on-crash recovery.
-   - Register a scheduled task (`GameGuardAgent`) that launches the tray Agent at logon for all standard users (`BUILTIN\Users`).
-   - Start the service immediately.
-
-3. **Set the parent unlock code** — launch the Admin tool (path printed by the script) with elevation and enter a strong code. Until a code is set the service blocks but no unlock is possible.
-
-   ```powershell
-   # Example path — adjust to your actual publish output
-   & ".\publish\admin\GameGuard.Admin.exe"
-   ```
+This produces a single `.\publish\GameGuard.exe` (self-contained win-x64). Hand that one file to the parent.
 
 ---
 
@@ -109,13 +104,9 @@ Changes take effect immediately — the service picks up the new config within i
 
 ## Uninstallation
 
-Run the uninstall script from an elevated PowerShell:
+Run `GameGuard.exe`, click **Uninstall**, and approve the UAC prompt. (You can run the copy in `C:\Program Files\GameGuard\` or the one you originally downloaded.)
 
-```powershell
-.\install\Uninstall-GameGuard.ps1
-```
-
-This stops and removes the Windows Service, unregisters the logon scheduled task, and strips the `# BEGIN GameGuard … # END GameGuard` block from the `hosts` file. Configuration and logs under `C:\ProgramData\GameGuard` are left in place — delete that folder manually if you no longer need the history.
+This stops and removes the Windows Service, unregisters the logon scheduled task, strips the `# BEGIN GameGuard … # END GameGuard` block from the `hosts` file, and deletes the config under `C:\ProgramData\GameGuard`. The installed `GameGuard.exe` in Program Files is left behind (a program cannot delete its own running image) — remove that folder manually if you wish.
 
 ---
 
@@ -125,7 +116,7 @@ This stops and removes the Windows Service, unregisters the logon scheduled task
 dotnet test
 ```
 
-All 33 unit tests should pass. The test suite covers code hashing, config serialisation, lock manager state, process scanning, hosts-file editing, pipe protocol, and unlock handler logic.
+All 36 unit tests should pass. The test suite covers code hashing, config serialisation, lock manager state, process scanning, hosts-file editing, pipe protocol, the block-event log, and unlock handler logic.
 
 ---
 

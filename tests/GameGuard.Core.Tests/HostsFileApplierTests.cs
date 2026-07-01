@@ -1,6 +1,6 @@
 using System.IO;
 using System.Runtime.Versioning;
-using GameGuard.Service;
+using GameGuard.Core;
 
 namespace GameGuard.Core.Tests;
 

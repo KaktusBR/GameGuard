@@ -17,6 +17,8 @@ public class AdminForm : Form
     {
         Text = "GameGuard — Admin";
         Width = 410; Height = 560; StartPosition = FormStartPosition.CenterScreen;
+        BackColor = App.Theme.WindowBg; ForeColor = App.Theme.Text;
+        ShowIcon = false;
 
         try { _config = ConfigStore.Load(ConfigPath); }
         catch (Exception ex)
@@ -37,7 +39,7 @@ public class AdminForm : Form
         AddRow("Blocked domains (one per line):", _domains, ref y);
         AddRow("Durations (minutes, comma-separated):", _durations, ref y);
 
-        var save = new Button { Text = "Save", Left = 16, Top = y + 8, Width = 360 };
+        var save = new App.PillButton { Text = "Save", Primary = true, Left = 16, Top = y + 8, Width = 360, Height = 42 };
         save.Click += (_, _) => Save();
         Controls.Add(save);
     }
