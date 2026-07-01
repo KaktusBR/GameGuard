@@ -9,6 +9,7 @@ static class TrayApp
 {
     private const string PipeName = "GameGuardPipe";
     private static readonly TimeSpan PopCooldown = TimeSpan.FromSeconds(30);
+    private static readonly int[] WarnThresholds = { 300, 120 }; // seconds remaining, descending
 
     public static void Run()
     {
@@ -19,7 +20,7 @@ static class TrayApp
         long lastBlockSeq = -1;                       // -1 = backlog not yet baselined
         var lastPop = DateTime.MinValue;
         bool? wasLocked = null;                        // null = first poll not yet seen
-        var warnedSoon = false;                        // "almost done" shown once per unlock
+        var warned = new HashSet<int>();               // expiry thresholds already toasted this unlock
 
         // Opens the (single) unlock window. blockedGame != null => auto-pop "blocked" mode.
         void OpenUnlock(string? blockedGame)
@@ -88,7 +89,7 @@ static class TrayApp
                 {
                     if (prev && !s.IsLocked)
                     {
-                        warnedSoon = false;
+                        warned.Clear();
                         Notify(tray, "Games unlocked",
                             $"Game time: {Duration(s.RemainingSeconds)} — until {Until(s.RemainingSeconds)}.",
                             ToolTipIcon.Info);
@@ -98,10 +99,23 @@ static class TrayApp
                         Notify(tray, "Time's up", "Game time is over — games are locked again.", ToolTipIcon.Info);
                     }
                 }
-                if (!s.IsLocked && s.RemainingSeconds is > 0 and <= 120 && !warnedSoon)
+                else if (!s.IsLocked)
                 {
-                    warnedSoon = true;
-                    Notify(tray, "Almost done", "About 2 minutes of game time left.", ToolTipIcon.Warning);
+                    // First poll already unlocked: suppress warnings for thresholds already passed.
+                    foreach (var t in WarnThresholds)
+                        if (s.RemainingSeconds <= t) warned.Add(t);
+                }
+
+                // Heads-up toasts as remaining time crosses each threshold (5 min, then 2 min).
+                if (!s.IsLocked && s.RemainingSeconds > 0)
+                {
+                    foreach (var t in WarnThresholds)
+                        if (s.RemainingSeconds <= t && warned.Add(t))
+                        {
+                            Notify(tray, "Heads up",
+                                $"About {t / 60} minutes of game time left.", ToolTipIcon.Warning);
+                            break; // at most one heads-up per poll
+                        }
                 }
                 wasLocked = s.IsLocked;
 
